@@ -36,7 +36,7 @@ function connect() {
         clearTimeout(reconnectTimer);
 
         reconnectTimer = setTimeout(() => {
-            console.log('\n20 minutes passed.');
+            console.log('\n20 minutes passed.33');
             console.log('Closing current WebSocket...');
 
             if (ws && ws.readyState === WebSocket.OPEN) {
