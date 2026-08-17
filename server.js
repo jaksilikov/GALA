@@ -109,23 +109,33 @@ function connect() {
         /*
          * SERVER 999
          */
-        if (TS[0] === '999') {
+       if (TS[0] === '999') {
+    sendMessage('FWLISTVER 311');
+    sendMessage('ADDONS 251824 1');
+    sendMessage('MYADDONS 251824 1');
+    sendMessage('PHONE 1920 1080 0 2 :chrome 151.0.0.0');
 
-            sendMessage('FWLISTVER 311');
-            sendMessage('ADDONS 251824 1');
-            sendMessage('MYADDONS 251824 1');
+    sendMessage('JOIN ');
 
-            sendMessage(
-                'PHONE 1920 1080 0 2 :chrome 151.0.0.0'
-            );
+    console.log('JOIN sent');
 
-            sendMessage('JOIN ');
-            sendMessage('SLEEP ');
+    // Через 2 секунды
+    setTimeout(() => {
+        sendMessage('REMOVE 96');
+        console.log('REMOVE 96 sent');
 
-            console.log(
-                'WebSocket authentication completed'
-            );
-        }
+        // Ещё через 3 секунды (итого 5 секунд после JOIN)
+        setTimeout(() => {
+            sendMessage('OBJ_ACT 5 15170420 1 go_to_bed');
+            console.log('OBJ_ACT sent');
+        }, 3000);
+
+    }, 2000);
+
+    sendMessage('SLEEP ');
+
+    console.log('WebSocket authentication completed');
+}
     });
 
     /*
