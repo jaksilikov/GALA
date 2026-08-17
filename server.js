@@ -127,12 +127,13 @@ function connect() {
         // Ещё через 3 секунды (итого 5 секунд после JOIN)
         setTimeout(() => {
             sendMessage('OBJ_ACT 5 15170420 1 go_to_bed');
+            sendMessage('SLEEP ');
             console.log('OBJ_ACT sent');
         }, 3000);
 
     }, 2000);
 
-    sendMessage('SLEEP ');
+    
 
     console.log('WebSocket authentication completed');
 }
