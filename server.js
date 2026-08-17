@@ -5,17 +5,19 @@ const WS_URL = 'wss://cs.mobstudio.ru:6672/';
 const RECONNECT_INTERVAL = 20 * 60 * 1000; // 20 минут
 
 let ws = null;
+let reconnectTimer = null;
 
 let webhash = '';
 let MyID = '';
 let MyPass = '';
 let MyNick = '';
 
-let reconnectTimer = null;
-
 function connect() {
+    console.log('\n================================');
     console.log('Connecting to WebSocket...');
+    console.log('================================');
 
+    // Сбрасываем данные предыдущего подключения
     webhash = '';
     MyID = '';
     MyPass = '';
@@ -30,17 +32,20 @@ function connect() {
 
         sendMessage(':ru IDENT 352 -2 4030 1 2 :GALA');
 
-        // Через 20 минут закрываем это соединение
+        // Следующее подключение ровно через 20 минут
         clearTimeout(reconnectTimer);
 
         reconnectTimer = setTimeout(() => {
-            console.log('20 minutes passed. Reconnecting...');
+            console.log('\n20 minutes passed.');
+            console.log('Closing current WebSocket...');
 
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.close();
-            } else {
-                connect();
             }
+
+            // Новое подключение
+            connect();
+
         }, RECONNECT_INTERVAL);
     });
 
@@ -53,16 +58,22 @@ function connect() {
             .split(' ')
             .map(item => item.trim());
 
-        // HAAAPSI
+        /*
+         * HAAAPSI
+         */
         if (TS[0] === 'HAAAPSI') {
             webhash = parse(TS[1]);
 
             console.log('webhash:', webhash);
 
-            sendMessage('RECOVER 5gr2x8c18k');
+            if (webhash) {
+                sendMessage('RECOVER 5gr2x8c18k');
+            }
         }
 
-        // REGISTER
+        /*
+         * REGISTER
+         */
         if (TS[0] === 'REGISTER') {
             MyID = TS[1] || '';
             MyPass = TS[2] || '';
@@ -74,79 +85,142 @@ function connect() {
             console.log('NICK:', MyNick);
 
             if (MyID && MyPass && MyNick && webhash) {
+
                 sendMessage(
                     `USER ${MyID} ${MyPass} ${MyNick} ${webhash.trim()}`
                 );
+
             } else {
+
                 console.error(
                     'Missing required parameters for USER message'
                 );
+
             }
         }
 
-        // PING
+        /*
+         * PING
+         */
         if (TS[0] === 'PING') {
             sendMessage('PONG');
         }
 
-        // 999
+        /*
+         * SERVER 999
+         */
         if (TS[0] === '999') {
+
             sendMessage('FWLISTVER 311');
             sendMessage('ADDONS 251824 1');
             sendMessage('MYADDONS 251824 1');
-            sendMessage('PHONE 1920 1080 0 2 :chrome 151.0.0.0');
+
+            sendMessage(
+                'PHONE 1920 1080 0 2 :chrome 151.0.0.0'
+            );
+
             sendMessage('JOIN ');
             sendMessage('SLEEP ');
 
-            console.log('WebSocket authentication completed');
+            console.log(
+                'WebSocket authentication completed'
+            );
         }
     });
 
+    /*
+     * CLOSE
+     *
+     * Здесь НЕТ автоматического reconnect.
+     * Новое соединение создаётся только таймером 20 минут.
+     */
     ws.on('close', (code, reason) => {
+
         console.log(
-            'Disconnected from WebSocket server',
-            'code:', code,
-            'reason:', reason.toString()
+            'Disconnected from WebSocket server'
         );
 
-        // Если сервер сам отключил соединение,
-        // переподключаемся через 5 секунд.
-        clearTimeout(reconnectTimer);
+        console.log(
+            'Close code:',
+            code
+        );
 
-        reconnectTimer = setTimeout(() => {
-            console.log('Reconnecting after server disconnect...');
-            connect();
-        }, 5000);
+        console.log(
+            'Close reason:',
+            reason.toString()
+        );
     });
 
+    /*
+     * ERROR
+     */
     ws.on('error', (err) => {
-        console.error('WebSocket error:', err.message);
+        console.error(
+            'WebSocket error:',
+            err.message
+        );
     });
 
+    /*
+     * PING
+     */
     ws.on('ping', () => {
-        console.log('WebSocket ping received');
+        console.log(
+            'WebSocket ping received'
+        );
     });
 }
 
+
+/*
+ * SEND MESSAGE
+ */
 function sendMessage(text) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(text + ' \r\n');
-        console.log('>>', text);
+
+    if (
+        ws &&
+        ws.readyState === WebSocket.OPEN
+    ) {
+
+        ws.send(
+            text + ' \r\n'
+        );
+
+        console.log(
+            '>>',
+            text
+        );
+
     } else {
+
         console.log(
             'WebSocket is not open. Message not sent:',
             text
         );
+
     }
 }
 
+
+/*
+ * MD5 / WEBHASH
+ */
 function parse(e) {
-    if (!e || typeof e !== 'string') {
-        console.error('Invalid input for parse function');
+
+    if (
+        !e ||
+        typeof e !== 'string'
+    ) {
+
+        console.error(
+            'Invalid input for parse function'
+        );
+
         return null;
     }
 
     try {
+
         const hash = crypto
             .createHash('md5')
             .update(e)
@@ -159,10 +233,18 @@ function parse(e) {
             .substr(5, 10);
 
     } catch (error) {
-        console.error('Hash error:', error);
+
+        console.error(
+            'Hash error:',
+            error
+        );
+
         return null;
     }
 }
 
-// Первое подключение
+
+/*
+ * FIRST CONNECTION
+ */
 connect();
