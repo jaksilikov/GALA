@@ -1,89 +1,119 @@
-const express = require('express');
-const cors = require('cors');
-const app = express();
+import WebSocket from 'ws';
+import crypto from 'crypto';
 
-app.use(cors());
-app.use(express.json());
-
-// ── Вся логика бота здесь — клиент её не видит ──
-
-function inList(arr, val) {
-  return arr.some(x => x.toLowerCase().trim() === val.toLowerCase().trim());
-}
-
-function shouldTarget(config, clan, nick) {
-  if (config.mode === 'black') {
-    return (clan && inList(config.blackClans, clan)) || inList(config.blackNicks, nick);
-  } else {
-    const safe = (clan && inList(config.whiteClans, clan)) || inList(config.whiteNicks, nick);
-    return !safe;
-  }
-}
-
-function parse353(line, config) {
-  const ci = line.indexOf(' :');
-  let cleaned = ci >= 0 ? line.substring(ci + 2) : line;
-  const tokens = cleaned.split(' ');
-  let clan = '';
-  const found = [];
-  let i = 0;
-  while (i < tokens.length - 1) {
-    const cur = tokens[i], next = tokens[i + 1];
-    const curIsName = /^\D/.test(cur);
-    const nextIsID  = /^\d{8,9}$/.test(next);
-    if (curIsName && nextIsID) {
-      const nick = cur.replace(/[@+\-]/g, ''), id = next;
-      if (shouldTarget(config, clan, nick)) found.push({ nick, id, clan });
-      i += 2;
-      while (i < tokens.length && /^-?\d+$/.test(tokens[i])) i++;
-      continue;
-    } else if (curIsName && !nextIsID) {
-      clan = cur.trim();
-    }
-    i++;
-  }
-  return found;
-}
-
-// ── Единственный endpoint ──
-app.post('/process', (req, res) => {
-  const { line, config } = req.body;
-  if (!line || !config) return res.json({ action: null });
-
-  const tokens = line.trim().split(' ');
-  const cmd = tokens[0];
-
-  // Список игроков в комнате
-  if (cmd === '353') {
-    const found = parse353(line, config);
-    if (found.length > 0) {
-      const target = found[Math.floor(Math.random() * found.length)];
-      return res.json({ action: 'attack', targetId: target.id, nick: target.nick, count: found.length });
-    }
-    return res.json({ action: null });
-  }
-
-  // Кто-то вошёл в комнату
-  if (cmd === 'JOIN' && tokens.length >= 4) {
-    const lc = tokens[1], lv = tokens[2], id = tokens[3];
-    if (shouldTarget(config, lc, lv)) {
-      return res.json({ action: 'join_attack', targetId: id, nick: lv });
-    }
-    return res.json({ action: null });
-  }
-
-  // Ответ на атаку — нельзя
-  if (cmd === '850') {
-    if (line.includes('Нельзя')) return res.json({ action: 'quit', reason: 'cant_attack' });
-    return res.json({ action: null });
-  }
-
-  // Неверный код
-  if (cmd === '451') return res.json({ action: 'quit', reason: 'bad_code' });
-
-  res.json({ action: null });
+const ws = new WebSocket('wss://cs.mobstudio.ru:6672/', {
+    rejectUnauthorized: false
 });
 
-app.listen(3006, () => {
-  console.log('[GalaxyBot] Server running on port 3006');
+let webhash = '';
+let MyID = '';
+let MyPass = '';
+let MyNick = '';
+
+ws.on('open', () => {
+    console.log('Connected to WebSocket server');
+
+    sendMessage(':ru IDENT 352 -2 4030 1 2 :GALA');
 });
+
+ws.on('message', async (data) => {
+    const message = data.toString();
+
+    console.log('<<', message);
+
+    const TS = message
+        .split(' ')
+        .map(item => item.trim());
+
+    // Получаем webhash
+    if (TS[0] === 'HAAAPSI') {
+        webhash = parse(TS[1]);
+
+        console.log('webhash:', webhash);
+
+        sendMessage('RECOVER 5gr2x8c18k');
+    }
+
+    // Получаем данные пользователя
+    if (TS[0] === 'REGISTER') {
+        MyID = TS[1] || '';
+        MyPass = TS[2] || '';
+        MyNick = TS[3] || '';
+
+        console.log('REGISTER:');
+        console.log('ID:', MyID);
+        console.log('PASS:', MyPass);
+        console.log('NICK:', MyNick);
+
+        if (MyID && MyPass && MyNick && webhash) {
+            sendMessage(
+                `USER ${MyID} ${MyPass} ${MyNick} ${webhash.trim()}`
+            );
+        } else {
+            console.error(
+                'Missing required parameters for USER message'
+            );
+        }
+    }
+
+    // Ping
+    if (TS[0] === 'PING') {
+        sendMessage('PONG');
+    }
+
+    // Сервер 999
+    if (TS[0] === '999') {
+        sendMessage('FWLISTVER 311');
+        sendMessage('ADDONS 251824 1');
+        sendMessage('MYADDONS 251824 1');
+        sendMessage('PHONE 1920 1080 0 2 :chrome 151.0.0.0');
+sendMessage('JOIN ');
+sendMessage('SLEEP ');
+        console.log('WebSocket authentication completed');
+    }
+});
+
+ws.on('close', () => {
+    console.log('Disconnected from WebSocket server');
+});
+
+ws.on('error', (err) => {
+    console.error('WebSocket error:', err);
+});
+
+ws.on('ping', () => {
+    console.log('WebSocket ping received');
+});
+
+function sendMessage(text) {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(text + ' \r\n');
+        console.log('>>', text);
+    } else {
+        console.log('WebSocket is not open. Message not sent:', text);
+    }
+}
+
+function parse(e) {
+    if (!e || typeof e !== 'string') {
+        console.error('Invalid input for parse function');
+        return null;
+    }
+
+    try {
+        const hash = crypto
+            .createHash('md5')
+            .update(e)
+            .digest('hex');
+
+        return hash
+            .split('')
+            .reverse()
+            .join('0')
+            .substr(5, 10);
+
+    } catch (error) {
+        console.error('Hash error:', error);
+        return null;
+    }
+}
