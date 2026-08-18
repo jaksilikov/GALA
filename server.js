@@ -7,10 +7,11 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const WS_URL = 'wss://cs.mobstudio.ru:6672/';
 
-const RECONNECT_INTERVAL = 5 * 60 * 1000;
+// Переподключение после отключения
+const DISCONNECT_RECONNECT_DELAY = 5 * 1000;
 
 let ws = null;
-let reconnectTimer = null;
+let disconnectReconnectTimer = null;
 let connectionId = 0;
 
 let webhash = '';
@@ -27,7 +28,7 @@ app.get('/', (req, res) => {
                 ? 'connected'
                 : 'disconnected'
             : 'not_started',
-        next_reconnect: '20 minutes'
+        reconnect_after_disconnect: '5 seconds'
     });
 });
 
@@ -40,12 +41,36 @@ app.get('/health', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`HTTP server started on port ${PORT}`);
+
+    console.log(
+        `HTTP server started on port ${PORT}`
+    );
+
     connect();
-    startReconnectTimer();
 });
 
+
 function connect() {
+
+    /*
+     * Если соединение уже существует,
+     * второй раз не подключаемся
+     */
+
+    if (
+        ws &&
+        (
+            ws.readyState === WebSocket.OPEN ||
+            ws.readyState === WebSocket.CONNECTING
+        )
+    ) {
+
+        console.log(
+            'WebSocket already connected or connecting'
+        );
+
+        return;
+    }
 
     connectionId++;
 
@@ -57,20 +82,53 @@ function connect() {
     console.log('Connecting...');
     console.log('================================');
 
+    /*
+     * Очищаем данные предыдущего соединения
+     */
+
     webhash = '';
     MyID = '';
     MyPass = '';
     MyNick = '';
 
-    const socket = new WebSocket(WS_URL, {
-        rejectUnauthorized: false
-    });
+    /*
+     * Создаём WebSocket
+     */
+
+    const socket = new WebSocket(
+        WS_URL,
+        {
+            rejectUnauthorized: false
+        }
+    );
 
     ws = socket;
 
+
+    /*
+     * CONNECTED
+     */
+
     socket.on('open', () => {
 
-        console.log(`[${id}] Connected`);
+        console.log(
+            `[${id}] Connected`
+        );
+
+        /*
+         * Если reconnect уже был запланирован,
+         * отменяем его
+         */
+
+        clearTimeout(
+            disconnectReconnectTimer
+        );
+
+        disconnectReconnectTimer = null;
+
+        /*
+         * IDENT
+         */
 
         sendMessage(
             socket,
@@ -78,15 +136,24 @@ function connect() {
         );
     });
 
+
+    /*
+     * MESSAGE
+     */
+
     socket.on('message', (data) => {
 
         const message = data.toString();
 
-        console.log('<<', message);
+        console.log(
+            '<<',
+            message
+        );
 
         const TS = message
             .split(' ')
             .map(item => item.trim());
+
 
         /*
          * HAAAPSI
@@ -94,7 +161,9 @@ function connect() {
 
         if (TS[0] === 'HAAAPSI') {
 
-            webhash = parse(TS[1]);
+            webhash = parse(
+                TS[1]
+            );
 
             console.log(
                 'webhash:',
@@ -110,6 +179,7 @@ function connect() {
             }
         }
 
+
         /*
          * REGISTER
          */
@@ -120,10 +190,25 @@ function connect() {
             MyPass = TS[2] || '';
             MyNick = TS[3] || '';
 
-            console.log('REGISTER:');
-            console.log('ID:', MyID);
-            console.log('PASS:', MyPass);
-            console.log('NICK:', MyNick);
+            console.log(
+                'REGISTER:'
+            );
+
+            console.log(
+                'ID:',
+                MyID
+            );
+
+            console.log(
+                'PASS:',
+                MyPass
+            );
+
+            console.log(
+                'NICK:',
+                MyNick
+            );
+
 
             if (
                 MyID &&
@@ -145,6 +230,7 @@ function connect() {
             }
         }
 
+
         /*
          * PING
          */
@@ -156,6 +242,7 @@ function connect() {
                 'PONG'
             );
         }
+
 
         /*
          * 999
@@ -192,6 +279,7 @@ function connect() {
                 'JOIN sent'
             );
 
+
             /*
              * 2 секунды после JOIN
              */
@@ -213,6 +301,7 @@ function connect() {
                 console.log(
                     'REMOVE 96 sent'
                 );
+
 
                 /*
                  * Ещё 3 секунды
@@ -236,14 +325,10 @@ function connect() {
                         'OBJ_ACT sent'
                     );
 
-                    sendMessage(
-                        socket,
-                        'SLEEP '
-                    );
-
                 }, 3000);
 
             }, 2000);
+
 
             console.log(
                 'WebSocket authentication completed'
@@ -251,9 +336,15 @@ function connect() {
         }
     });
 
+
+    /*
+     * CLOSE
+     */
+
     socket.on('close', (code, reason) => {
 
         console.log('');
+
         console.log(
             `[${id}] WebSocket disconnected`
         );
@@ -268,13 +359,64 @@ function connect() {
             reason.toString()
         );
 
+
         /*
-         * Никакого reconnect здесь нет.
-         *
-         * Переподключение выполняется
-         * только общим 20-минутным таймером.
+         * Если это всё ещё текущее соединение,
+         * очищаем ws
          */
+
+        if (ws === socket) {
+
+            ws = null;
+        }
+
+
+        /*
+         * Если reconnect уже был запланирован,
+         * отменяем старый таймер
+         */
+
+        clearTimeout(
+            disconnectReconnectTimer
+        );
+
+
+        /*
+         * Через 5 секунд подключаемся снова
+         */
+
+        disconnectReconnectTimer = setTimeout(() => {
+
+            console.log('');
+
+            console.log(
+                '================================'
+            );
+
+            console.log(
+                '5 SECONDS PASSED'
+            );
+
+            console.log(
+                'Auto reconnecting WebSocket...'
+            );
+
+            console.log(
+                '================================'
+            );
+
+
+            disconnectReconnectTimer = null;
+
+            connect();
+
+        }, DISCONNECT_RECONNECT_DELAY);
     });
+
+
+    /*
+     * ERROR
+     */
 
     socket.on('error', (err) => {
 
@@ -282,7 +424,19 @@ function connect() {
             `[${id}] WebSocket error:`,
             err.message
         );
+
+        /*
+         * Отдельный reconnect здесь НЕ запускаем.
+         *
+         * После error обычно приходит close,
+         * а reconnect выполняется там.
+         */
     });
+
+
+    /*
+     * PING
+     */
 
     socket.on('ping', () => {
 
@@ -292,64 +446,15 @@ function connect() {
     });
 }
 
-function startReconnectTimer() {
 
-    clearTimeout(reconnectTimer);
+/*
+ * SEND MESSAGE
+ */
 
-    reconnectTimer = setTimeout(() => {
-
-        console.log('');
-        console.log(
-            '================================'
-        );
-
-        console.log(
-            '20 MINUTES PASSED'
-        );
-
-        console.log(
-            'Reconnecting WebSocket...'
-        );
-
-        console.log(
-            '================================'
-        );
-
-        /*
-         * Закрываем старое соединение
-         */
-
-        if (
-            ws &&
-            ws.readyState === WebSocket.OPEN
-        ) {
-
-            ws.close();
-
-        } else if (
-            ws &&
-            ws.readyState === WebSocket.CONNECTING
-        ) {
-
-            ws.terminate();
-        }
-
-        /*
-         * Создаём новое
-         */
-
-        connect();
-
-        /*
-         * Снова ставим таймер
-         */
-
-        startReconnectTimer();
-
-    }, RECONNECT_INTERVAL);
-}
-
-function sendMessage(socket, text) {
+function sendMessage(
+    socket,
+    text
+) {
 
     if (
         socket &&
@@ -374,6 +479,11 @@ function sendMessage(socket, text) {
     }
 }
 
+
+/*
+ * WEBHASH
+ */
+
 function parse(e) {
 
     if (
@@ -388,12 +498,14 @@ function parse(e) {
         return null;
     }
 
+
     try {
 
         const hash = crypto
             .createHash('md5')
             .update(e)
             .digest('hex');
+
 
         return hash
             .split('')
