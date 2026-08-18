@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const WS_URL = 'wss://cs.mobstudio.ru:6672/';
 
-const RECONNECT_INTERVAL = 14 * 60 * 1000;
+const RECONNECT_INTERVAL = 5 * 60 * 1000;
 
 let ws = null;
 let reconnectTimer = null;
