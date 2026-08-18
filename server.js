@@ -1,55 +1,85 @@
+import express from 'express';
 import WebSocket from 'ws';
 import crypto from 'crypto';
 
+const app = express();
+
+const PORT = process.env.PORT || 10000;
 const WS_URL = 'wss://cs.mobstudio.ru:6672/';
-const RECONNECT_INTERVAL = 20 * 60 * 1000; // 20 минут
+
+const RECONNECT_INTERVAL = 14 * 60 * 1000;
 
 let ws = null;
 let reconnectTimer = null;
+let connectionId = 0;
 
 let webhash = '';
 let MyID = '';
 let MyPass = '';
 let MyNick = '';
 
+app.get('/', (req, res) => {
+    res.json({
+        ok: true,
+        service: 'GalaxyBot',
+        websocket: ws
+            ? ws.readyState === WebSocket.OPEN
+                ? 'connected'
+                : 'disconnected'
+            : 'not_started',
+        next_reconnect: '20 minutes'
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.json({
+        ok: true,
+        websocket_connected:
+            ws?.readyState === WebSocket.OPEN
+    });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`HTTP server started on port ${PORT}`);
+    connect();
+    startReconnectTimer();
+});
+
 function connect() {
-    console.log('\n================================');
-    console.log('Connecting to WebSocket...');
+
+    connectionId++;
+
+    const id = connectionId;
+
+    console.log('');
+    console.log('================================');
+    console.log(`WebSocket connection #${id}`);
+    console.log('Connecting...');
     console.log('================================');
 
-    // Сбрасываем данные предыдущего подключения
     webhash = '';
     MyID = '';
     MyPass = '';
     MyNick = '';
 
-    ws = new WebSocket(WS_URL, {
+    const socket = new WebSocket(WS_URL, {
         rejectUnauthorized: false
     });
 
-    ws.on('open', () => {
-        console.log('Connected to WebSocket server');
+    ws = socket;
 
-        sendMessage(':ru IDENT 352 -2 4030 1 2 :GALA');
+    socket.on('open', () => {
 
-        // Следующее подключение ровно через 20 минут
-        clearTimeout(reconnectTimer);
+        console.log(`[${id}] Connected`);
 
-        reconnectTimer = setTimeout(() => {
-            console.log('\n20 minutes passed.33');
-            console.log('Closing current WebSocket...');
-
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.close();
-            }
-
-            // Новое подключение
-            connect();
-
-        }, RECONNECT_INTERVAL);
+        sendMessage(
+            socket,
+            ':ru IDENT 352 -2 4030 1 2 :GALA'
+        );
     });
 
-    ws.on('message', async (data) => {
+    socket.on('message', (data) => {
+
         const message = data.toString();
 
         console.log('<<', message);
@@ -61,20 +91,31 @@ function connect() {
         /*
          * HAAAPSI
          */
+
         if (TS[0] === 'HAAAPSI') {
+
             webhash = parse(TS[1]);
 
-            console.log('webhash:', webhash);
+            console.log(
+                'webhash:',
+                webhash
+            );
 
             if (webhash) {
-                sendMessage('RECOVER 5gr2x8c18k');
+
+                sendMessage(
+                    socket,
+                    'RECOVER 5gr2x8c18k'
+                );
             }
         }
 
         /*
          * REGISTER
          */
+
         if (TS[0] === 'REGISTER') {
+
             MyID = TS[1] || '';
             MyPass = TS[2] || '';
             MyNick = TS[3] || '';
@@ -84,116 +125,238 @@ function connect() {
             console.log('PASS:', MyPass);
             console.log('NICK:', MyNick);
 
-            if (MyID && MyPass && MyNick && webhash) {
+            if (
+                MyID &&
+                MyPass &&
+                MyNick &&
+                webhash
+            ) {
 
                 sendMessage(
+                    socket,
                     `USER ${MyID} ${MyPass} ${MyNick} ${webhash.trim()}`
                 );
 
             } else {
 
                 console.error(
-                    'Missing required parameters for USER message'
+                    'Missing required parameters'
                 );
-
             }
         }
 
         /*
          * PING
          */
+
         if (TS[0] === 'PING') {
-            sendMessage('PONG');
+
+            sendMessage(
+                socket,
+                'PONG'
+            );
         }
 
         /*
-         * SERVER 999
+         * 999
          */
-       if (TS[0] === '999') {
-    sendMessage('FWLISTVER 311');
-    sendMessage('ADDONS 251824 1');
-    sendMessage('MYADDONS 251824 1');
-    sendMessage('PHONE 1920 1080 0 2 :chrome 151.0.0.0');
 
-    sendMessage('JOIN ');
+        if (TS[0] === '999') {
 
-    console.log('JOIN sent');
+            sendMessage(
+                socket,
+                'FWLISTVER 311'
+            );
 
-    // Через 2 секунды
-    setTimeout(() => {
-        sendMessage('REMOVE 96');
-        console.log('REMOVE 96 sent');
+            sendMessage(
+                socket,
+                'ADDONS 251824 1'
+            );
 
-        // Ещё через 3 секунды (итого 5 секунд после JOIN)
-        setTimeout(() => {
-            sendMessage('OBJ_ACT 5 15170420 1 go_to_bed');
-            sendMessage('SLEEP ');
-            console.log('OBJ_ACT sent');
-        }, 3000);
+            sendMessage(
+                socket,
+                'MYADDONS 251824 1'
+            );
 
-    }, 2000);
+            sendMessage(
+                socket,
+                'PHONE 1920 1080 0 2 :chrome 151.0.0.0'
+            );
 
-    
+            sendMessage(
+                socket,
+                'JOIN '
+            );
 
-    console.log('WebSocket authentication completed');
-}
+            console.log(
+                'JOIN sent'
+            );
+
+            /*
+             * 2 секунды после JOIN
+             */
+
+            setTimeout(() => {
+
+                if (
+                    socket.readyState !==
+                    WebSocket.OPEN
+                ) {
+                    return;
+                }
+
+                sendMessage(
+                    socket,
+                    'REMOVE 96'
+                );
+
+                console.log(
+                    'REMOVE 96 sent'
+                );
+
+                /*
+                 * Ещё 3 секунды
+                 */
+
+                setTimeout(() => {
+
+                    if (
+                        socket.readyState !==
+                        WebSocket.OPEN
+                    ) {
+                        return;
+                    }
+
+                    sendMessage(
+                        socket,
+                        'OBJ_ACT 5 15170420 1 go_to_bed'
+                    );
+
+                    console.log(
+                        'OBJ_ACT sent'
+                    );
+
+                    sendMessage(
+                        socket,
+                        'SLEEP '
+                    );
+
+                }, 3000);
+
+            }, 2000);
+
+            console.log(
+                'WebSocket authentication completed'
+            );
+        }
     });
 
-    /*
-     * CLOSE
-     *
-     * Здесь НЕТ автоматического reconnect.
-     * Новое соединение создаётся только таймером 20 минут.
-     */
-    ws.on('close', (code, reason) => {
+    socket.on('close', (code, reason) => {
 
+        console.log('');
         console.log(
-            'Disconnected from WebSocket server'
+            `[${id}] WebSocket disconnected`
         );
 
         console.log(
-            'Close code:',
+            'Code:',
             code
         );
 
         console.log(
-            'Close reason:',
+            'Reason:',
             reason.toString()
         );
+
+        /*
+         * Никакого reconnect здесь нет.
+         *
+         * Переподключение выполняется
+         * только общим 20-минутным таймером.
+         */
     });
 
-    /*
-     * ERROR
-     */
-    ws.on('error', (err) => {
+    socket.on('error', (err) => {
+
         console.error(
-            'WebSocket error:',
+            `[${id}] WebSocket error:`,
             err.message
         );
     });
 
-    /*
-     * PING
-     */
-    ws.on('ping', () => {
+    socket.on('ping', () => {
+
         console.log(
-            'WebSocket ping received'
+            `[${id}] WebSocket ping`
         );
     });
 }
 
+function startReconnectTimer() {
 
-/*
- * SEND MESSAGE
- */
-function sendMessage(text) {
+    clearTimeout(reconnectTimer);
+
+    reconnectTimer = setTimeout(() => {
+
+        console.log('');
+        console.log(
+            '================================'
+        );
+
+        console.log(
+            '20 MINUTES PASSED'
+        );
+
+        console.log(
+            'Reconnecting WebSocket...'
+        );
+
+        console.log(
+            '================================'
+        );
+
+        /*
+         * Закрываем старое соединение
+         */
+
+        if (
+            ws &&
+            ws.readyState === WebSocket.OPEN
+        ) {
+
+            ws.close();
+
+        } else if (
+            ws &&
+            ws.readyState === WebSocket.CONNECTING
+        ) {
+
+            ws.terminate();
+        }
+
+        /*
+         * Создаём новое
+         */
+
+        connect();
+
+        /*
+         * Снова ставим таймер
+         */
+
+        startReconnectTimer();
+
+    }, RECONNECT_INTERVAL);
+}
+
+function sendMessage(socket, text) {
 
     if (
-        ws &&
-        ws.readyState === WebSocket.OPEN
+        socket &&
+        socket.readyState === WebSocket.OPEN
     ) {
 
-        ws.send(
+        socket.send(
             text + ' \r\n'
         );
 
@@ -205,17 +368,12 @@ function sendMessage(text) {
     } else {
 
         console.log(
-            'WebSocket is not open. Message not sent:',
+            'WebSocket is not open:',
             text
         );
-
     }
 }
 
-
-/*
- * MD5 / WEBHASH
- */
 function parse(e) {
 
     if (
@@ -253,9 +411,3 @@ function parse(e) {
         return null;
     }
 }
-
-
-/*
- * FIRST CONNECTION
- */
-connect();
