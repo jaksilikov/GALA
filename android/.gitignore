@@ -11,3 +11,6 @@ captures/
 *.aab
 *.keystore
 *.jks
+
+# Собранный APK для скачивания (см. android/README.md)
+!apk/*.apk

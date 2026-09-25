@@ -31,6 +31,13 @@ Android-версия бота из `server.js`: подключается к `wss
 << PING  →  >> PONG
 ```
 
+## Готовый APK
+
+Собранный debug-APK лежит в репозитории: [`android/apk/GalaxyBot-debug.apk`](apk/GalaxyBot-debug.apk)
+(на странице файла в GitHub — кнопка *Download raw file*). Установка: скопировать файл
+на телефон, открыть, разрешить установку из этого источника, нажать *Установить*.
+Требуется Android 8.0+.
+
 ## Как собрать
 
 **Вариант 1 — GitHub Actions.** При любом изменении в папке `android/` workflow
