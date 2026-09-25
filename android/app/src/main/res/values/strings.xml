@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GalaxyBot</string>
+    <string name="server_url" translatable="false">wss://cs.mobstudio.ru:6672/</string>
+
+    <string name="recover_code_hint">RECOVER-код</string>
+    <string name="recover_code_helper">Код восстановления. Отправляется серверу командой RECOVER после HAAAPSI</string>
+    <string name="error_code_required">Введите RECOVER-код</string>
+
+    <string name="action_connect">Подключиться</string>
+    <string name="action_disconnect">Отключиться</string>
+    <string name="auto_reconnect">Переподключаться через 5 с после разрыва</string>
+
+    <string name="status_disconnected">Не подключено</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_connected">Подключено</string>
+    <string name="status_disconnecting">Отключение…</string>
+    <string name="status_waiting_reconnect">Разрыв связи. Переподключение через 5 с…</string>
+
+    <string name="log_title">Лог</string>
+    <string name="log_copy">Копировать</string>
+    <string name="log_clear">Очистить</string>
+    <string name="log_copied">Лог скопирован в буфер обмена</string>
+    <string name="log_empty">Лог пуст</string>
+    <string name="log_empty_hint">Введите RECOVER-код и нажмите «Подключиться».\nЗдесь будет весь обмен с сервером:\n&lt;&lt; входящие, &gt;&gt; исходящие</string>
+
+    <string name="command_hint">Команда серверу (например, PONG)</string>
+    <string name="send">Отправить</string>
+</resources>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingVertical="1dp">
+
+    <TextView
+        android:id="@+id/timeText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/log_time"
+        android:textSize="11sp"
+        tools:text="12:00:00" />
+
+    <TextView
+        android:id="@+id/bodyText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:fontFamily="monospace"
+        android:textColor="@color/log_info"
+        android:textSize="12sp"
+        tools:text="&lt;&lt; HAAAPSI 1234567890" />
+
+</LinearLayout>

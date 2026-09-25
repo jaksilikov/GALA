@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Тема -->
+    <color name="primary">#3949AB</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="primary_container">#C5CAE9</color>
+    <color name="on_primary_container">#1A237E</color>
+
+    <!-- Иконка -->
+    <color name="ic_launcher_background">#1A237E</color>
+
+    <!-- Панель лога (тёмная, как консоль) -->
+    <color name="log_bg">#1E1E2E</color>
+    <color name="log_time">#7F849C</color>
+    <color name="log_in">#89DCEB</color>
+    <color name="log_out">#F9E2AF</color>
+    <color name="log_info">#CDD6F4</color>
+    <color name="log_state">#A6E3A1</color>
+    <color name="log_error">#F38BA8</color>
+
+    <!-- Индикатор состояния -->
+    <color name="status_off">#9E9E9E</color>
+    <color name="status_pending">#FFB300</color>
+    <color name="status_on">#43A047</color>
+</resources>
