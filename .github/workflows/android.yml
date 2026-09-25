@@ -10,10 +10,18 @@ on:
       - "android/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
+    inputs:
+      publish_blob:
+        description: "Also publish APK as a git blob (downloadable via api.github.com)"
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write # только для шага «Publish APK as git blob»
 
     steps:
       - name: Checkout
@@ -40,3 +48,26 @@ jobs:
           name: GalaxyBot-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Артефакты Actions лежат в хранилище, недоступном из некоторых сетей.
+      # Если в сообщении коммита есть [apk] (или задан input publish_blob),
+      # APK дополнительно публикуется как git-blob: его можно скачать через
+      #   gh api repos/<owner>/<repo>/git/blobs/<sha> -H "Accept: application/vnd.github.raw"
+      # Blob не привязан ни к одной ветке и со временем удаляется сборщиком мусора GitHub.
+      - name: Publish APK as git blob
+        if: contains(github.event.head_commit.message, '[apk]') || inputs.publish_blob == true
+        working-directory: android
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          base64 -w0 "$APK" > /tmp/apk.b64
+          jq -n --rawfile content /tmp/apk.b64 '{encoding: "base64", content: $content}' > /tmp/blob.json
+          SHA=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input /tmp/blob.json --jq .sha)
+          echo "::notice title=apk-blob-sha::${SHA}"
+          {
+            echo "### APK как git-blob"
+            echo '```'
+            echo "gh api repos/${GITHUB_REPOSITORY}/git/blobs/${SHA} -H 'Accept: application/vnd.github.raw' > app-debug.apk"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
